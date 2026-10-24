@@ -2,8 +2,6 @@
 
 A web application for family groups to share locations, manage safe zones, and send SOS alerts.
 
-Based on the [original FSEAS project](https://github.com/harsh-dhamaa/familySafety_fseas). This repository is independently maintained.
-
 ## Tech Stack
 
 | Layer | Technologies |
