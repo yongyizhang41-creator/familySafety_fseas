@@ -1,0 +1,16 @@
+{
+  "name": "fseas-monorepo",
+  "version": "1.0.0",
+  "description": "Family Safety & Emergency Alert System (FSEAS)",
+  "scripts": {
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "install-all": "npm install --prefix client && npm install --prefix server && npm install",
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

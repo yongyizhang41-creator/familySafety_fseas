@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-white bg-[#111827]; /* Tailwind darkbg */
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+}
