@@ -1,78 +1,138 @@
 # FSEAS — Family Safety & Emergency Alert System
 
-Based on the [original FSEAS project](https://github.com/harsh-dhamaa/familySafety_fseas). This repository is independently maintained.
+A web application for family groups to share locations, manage safe zones, and send SOS alerts.
 
-FSEAS is a modern, real-time web application designed to keep families safe through live location tracking, smart safe zones (geofences), and instant SOS alerts.
+Based on the [original FSEAS project](https://github.com/harsh-dhamaa/familySafety_fseas). This repository is independently maintained.
 
 ## Tech Stack
 
-**Frontend:**
-- React 18 / Vite
-- Zustand (State Management)
-- Tailwind CSS (Styling)
-- Socket.io-client (Real-time updates)
-- Firebase JS SDK (Push Notifications)
-- Google Maps React Wrapper
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React 18, Vite 5, React Router 6, Zustand 4 |
+| Styling | Tailwind CSS 3, React Hot Toast |
+| Maps | Leaflet 1.9, React Leaflet 4, OpenStreetMap tiles |
+| API client and real-time communication | Axios, Socket.io Client 4 |
+| Backend | Node.js, Express 4, Socket.io 4 |
+| Database | MongoDB with Mongoose 8 |
+| Authentication | JSON Web Tokens, bcryptjs, HTTP-only refresh cookies |
+| Notifications | Firebase JavaScript SDK 10, Firebase Admin SDK 12, service worker |
+| Server utilities | Helmet, CORS, express-validator, node-cron |
+| Deployment | Render Node web service; Node.js 22.23.3 in `render.yaml` |
 
-**Backend:**
-- Node.js 20 LTS / Express 4
-- MongoDB Atlas / Mongoose 8
-- Socket.io 4 (Real-time events)
-- Firebase Admin SDK (Push Notifications)
-- JWT (Access & Refresh tokens)
-- node-cron (Automated data purging)
+The live map uses OpenStreetMap tiles and does not require a Google Maps API key. The Google Maps wrapper remains in the dependency list but is not used by the live map.
+
+## Architecture
+
+The repository contains a React client in `client/` and an Express server in `server/`.
+
+```text
+Browser: React UI, Zustand, Leaflet, Geolocation API
+    | REST requests (/api/*) and Socket.io events
+    v
+Node.js: Express API + Socket.io server
+    |-- MongoDB: users, groups, locations, safe zones, SOS alerts, notifications
+    |-- Geofence checks: distance calculation and in-memory boundary state
+    |-- Scheduled job: delete expired location records
+    `-- Firebase Admin: push delivery when configured
+```
+
+- **Development:** Vite serves the frontend on port `5173`; Express and Socket.io run on port `5000` by default.
+- **Production:** Express serves the built React application from `client/dist`, the REST API, and Socket.io through the same Render service and HTTPS origin.
+- **Authentication:** Access tokens are kept in Zustand memory. Refresh tokens use HTTP-only cookies with `SameSite=Strict` and the `Secure` flag in production. Protected API routes enforce authentication and role or group permissions.
+- **Location updates:** The browser watches the user's position while the user is authenticated, belongs to a group, and has location sharing enabled. Updates are throttled to at most one every 10 seconds and sent through Socket.io. The server stores locations, broadcasts updates to the group, and checks safe-zone boundaries. A REST location-update endpoint is also available.
+- **Geofencing:** The server uses the Haversine formula to compare reported coordinates with circular safe zones. Entry/exit state is held in memory and resets on restart; the first update establishes a baseline without generating a crossing alert.
+- **Retention:** Location records have a seven-day MongoDB TTL index, with a daily cleanup job as a second mechanism. The history endpoint returns up to the latest 100 records per requested group member.
+
+Location tracking depends on browser permissions and continued browser location updates. Closing the application or browser background restrictions can interrupt tracking and geofence detection.
 
 ## Features
 
-1. **Authentication & Authorization**
-   - Secure login & registration with JWT access tokens (in-memory) and refresh tokens (HTTP-only cookies).
-   - Groups system with alphanumeric invite codes.
-   - Admin panel to oversee and manage all users and groups.
+- **Accounts and sessions:** Register, log in, refresh sessions, log out, and update profile or location-sharing preferences.
+- **Family groups:** Create or join a group using an invite code, view members, and manage membership through owner controls.
+- **Live map:** Display group-member locations and safe zones using Leaflet and OpenStreetMap, with a control to center the map on the user's location.
+- **Location history:** View stored location records for members of the same group, subject to the seven-day retention policy and the endpoint's 100-record limit.
+- **SOS alerts:** Send an SOS alert with location information, notify group members in real time, resolve active alerts, and view alert history.
+- **Safe zones:** Group owners can create, edit, and delete circular safe zones. Reported boundary crossings generate group socket events and stored notifications.
+- **Notifications:** View in-app notifications. Firebase Cloud Messaging supports push delivery when server credentials, frontend Firebase settings, a VAPID key, and browser notification permission are configured.
+- **Administration:** Accounts with the `admin` role can view users and groups and delete users. Registration does not provide a public admin-role selector.
+- **Health endpoint:** `GET /health` returns a JSON response for service health checks.
 
-2. **Live Location Tracking**
-   - High-accuracy GPS tracking using HTML5 Geolocation API.
-   - Pushed directly to group members via WebSockets.
-   - Privacy-focused: Location sharing can be toggled on/off at any time.
-   - View historical location trails up to 7 days.
-
-3. **SOS Alerts**
-   - One-tap SOS button that pulses and requires confirmation.
-   - Broadcasts immediate full-screen alerts to all group members.
-   - Includes Google Maps integration with exact trigger coordinates.
-   - Resolved alerts are stored securely for historical review.
-
-4. **Smart Safe Zones (Geofencing)**
-   - Group owners can define circular boundaries around key locations (e.g., Home, School).
-   - In-memory geospatial state tracking using Haversine algorithm.
-   - Instant notifications (Sockets & Push) when a user enters or exits a safe zone.
-
-5. **Cross-platform Push Notifications**
-   - Fully integrated with Firebase Cloud Messaging (FCM).
-   - Works in Web environments utilizing Service Workers.
+Firebase push delivery is optional and is not enabled by the default Render blueprint alone. The most recently verified deployment started without a Firebase service account, so push delivery requires additional configuration.
 
 ## Setup Instructions
 
-### Pre-requisites
-- Node.js v20+
-- MongoDB Atlas cluster URL
-- Firebase service account JSON
-- Google Maps API Key
-- VAPID keys for Firebase Web Push
+### Prerequisites
 
-### Backend Setup
-1. Navigate to `server/`
-2. Run `npm install`
-3. Copy `.env.example` to `.env` and fill in all variables.
-4. Run `npm run dev` (starts on port 5000)
+- Node.js 22.23.3 to match the Render configuration, with npm.
+- A MongoDB database reachable from your local machine or Render service.
+- A browser with geolocation support and location permission. Use localhost for local development and HTTPS for a hosted deployment.
+- Optional: a Firebase project with Cloud Messaging, a service account, and a Web Push VAPID public key.
 
-### Frontend Setup
-1. Navigate to `client/`
-2. Run `npm install`
-3. Copy `.env.example` to `.env` and fill in all variables.
-4. Run `npm run dev` (starts on port 5173)
+### Local Development
 
-## Architecture Notes
+1. Clone the repository and install dependencies:
 
-- **Geofencing:** Handled server-side to prevent battery drain on client devices and ensure alerts trigger even if the app minimizes.
-- **Token Security:** XSS-protected by keeping Access Tokens entirely in Zustand memory. CSRF-protected by utilizing HTTP-only strict cookies strictly for Refresh Tokens.
-- **Data Pruning:** Uses a two-tier approach for deleting old locations. MongoDB TTL Indexes (7 days) + a daily cron job backup.
+   ```bash
+   git clone https://github.com/yongyizhang41-creator/familySafety_fseas.git
+   cd familySafety_fseas
+   npm run install-all
+   ```
+
+2. Create the environment files:
+
+   ```bash
+   cp server/.env.example server/.env
+   cp client/.env.example client/.env
+   ```
+
+3. Edit `server/.env`:
+
+   - Set `MONGODB_URI` to your MongoDB connection string.
+   - Set `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and `COOKIE_SECRET` to separate random values. Generate each value with `openssl rand -hex 32`.
+   - Keep `NODE_ENV=development`, `PORT=5000`, and `CLIENT_ORIGIN=http://localhost:5173` for the default local setup.
+   - Keep the sample token lifetimes (`15m` and `7d`) or adjust them as needed.
+   - Leave `FIREBASE_SERVICE_ACCOUNT_KEY` empty unless configuring push notifications.
+
+4. In `client/.env`, keep the default local endpoints:
+
+   ```dotenv
+   VITE_API_URL=http://localhost:5000/api
+   VITE_SOCKET_URL=http://localhost:5000
+   ```
+
+   Firebase settings can remain empty for the core application. `VITE_GOOGLE_MAPS_API_KEY` is not required for the Leaflet map.
+
+5. Start the frontend and backend from the repository root:
+
+   ```bash
+   npm run dev
+   ```
+
+   Open `http://localhost:5173`. Check the backend at `http://localhost:5000/health`. Register an account, create or join a group, and allow location access to use location sharing.
+
+### Optional Firebase Push Notifications
+
+1. Set `FIREBASE_SERVICE_ACCOUNT_KEY` on the server to a valid service-account JSON string. Keep this value on the server only.
+2. Fill in the `VITE_FIREBASE_*` values from `client/.env.example`, including `VITE_FIREBASE_VAPID_KEY`, using the same Firebase project.
+3. Restart local development, or rebuild and redeploy production after changing frontend variables. Vite embeds these values during the build; never place service-account credentials in a `VITE_*` variable.
+4. Allow notifications in a browser that supports Firebase Cloud Messaging. The frontend registers `client/public/firebase-messaging-sw.js` for background notifications.
+
+### Render Deployment
+
+The repository includes `render.yaml` for a single free Node web service.
+
+1. Connect the GitHub repository to Render and create a Blueprint using `render.yaml`.
+2. Supply `MONGODB_URI` and allow the Render service to connect to your database. The blueprint generates the JWT and cookie secrets automatically.
+3. Render uses these commands from the repository root:
+
+   ```bash
+   # Build
+   npm ci --prefix client --include=dev && npm ci --prefix server --omit=dev && npm run build
+
+   # Start
+   npm start
+   ```
+
+4. Keep `NODE_ENV=production` and `VITE_API_URL=/api`. Leave `VITE_SOCKET_URL` unset to use the page's origin. The server uses Render's `RENDER_EXTERNAL_URL` as the client origin unless `CLIENT_ORIGIN` is explicitly set.
+5. Add the optional Firebase environment variables before building if push notifications are needed.
+6. Deploy and verify `/health`. Render's health-check path is already set to `/health` in the blueprint. Free instances can spin down during inactivity and take time to wake up.
